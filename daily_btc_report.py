@@ -26,7 +26,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 UPBIT_CANDLES_URL = "https://api.upbit.com/v1/candles/days"
 UPBIT_TICKER_URL = "https://api.upbit.com/v1/ticker"
 
-NAVER_NEWS_RSS = "https://search.naver.com/search.naver?where=rss&query=비트코인"
+NAVER_NEWS_RSS = "https://www.blockmedia.co.kr/feed"
 COINDESK_RSS = "https://www.coindesk.com/arc/outboundfeeds/rss/"
 
 
