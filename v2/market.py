@@ -28,27 +28,27 @@ def get_open_interest_change(symbol="BTCUSDT", period="1h", limit=24):
         return 0.0
 
 
+def _get_json(url, params):
+    """Binance 응답을 가져오되, 예상한 필드가 없는 경우(지역 차단/에러 응답 등)
+    원본 응답 내용을 그대로 노출하는 예외를 던진다. (KeyError로 뭉개지 않기 위함)"""
+    resp = requests.get(url, params=params, timeout=10)
+    data = resp.json()
+    if isinstance(data, dict) and ("code" in data and "msg" in data):
+        raise RuntimeError(
+            f"Binance API 에러 응답 (status={resp.status_code}): {data}"
+        )
+    return data
+
+
 def get_market_data(symbol="BTCUSDT"):
     # 24시간 시세
-    ticker = requests.get(
-        f"{BASE_URL}/fapi/v1/ticker/24hr",
-        params={"symbol": symbol},
-        timeout=10,
-    ).json()
+    ticker = _get_json(f"{BASE_URL}/fapi/v1/ticker/24hr", {"symbol": symbol})
 
     # Funding Rate
-    funding = requests.get(
-        f"{BASE_URL}/fapi/v1/fundingRate",
-        params={"symbol": symbol, "limit": 1},
-        timeout=10,
-    ).json()
+    funding = _get_json(f"{BASE_URL}/fapi/v1/fundingRate", {"symbol": symbol, "limit": 1})
 
     # Open Interest
-    oi = requests.get(
-        f"{BASE_URL}/fapi/v1/openInterest",
-        params={"symbol": symbol},
-        timeout=10,
-    ).json()
+    oi = _get_json(f"{BASE_URL}/fapi/v1/openInterest", {"symbol": symbol})
 
     return {
         "symbol": symbol,
