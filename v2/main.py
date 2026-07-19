@@ -105,6 +105,27 @@ def ai_interpretation(data, score, label, note):
         return note
 
 
+def send_telegram_message(text):
+    """TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 환경변수를 이용해 텔레그램으로 전송한다.
+    (v1의 daily_btc_report.py와 동일한 Secrets를 재사용 가능)"""
+    import requests
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("[텔레그램 미전송] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 환경변수가 없습니다.")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    resp = requests.post(
+        url,
+        data={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return True
+
+
 def build_report(symbol="BTCUSDT"):
     data = get_market_data(symbol)
     score = calculate_score(data)
@@ -129,7 +150,11 @@ def build_report(symbol="BTCUSDT"):
 
 
 def main():
-    print(build_report())
+    report = build_report()
+    print(report)
+    print()
+    if send_telegram_message(report):
+        print("[텔레그램 전송 완료]")
 
 
 if __name__ == "__main__":
