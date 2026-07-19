@@ -1,0 +1,30 @@
+name: v2 BTC Futures Report (Test)
+
+on:
+  schedule:
+    # KST 06:00 = UTC 전날 21:00 (UTC = KST - 9시간)
+    - cron: "0 21 * * *"
+  workflow_dispatch: {} # 수동 실행 버튼 (테스트용)
+
+jobs:
+  send-v2-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r v2/requirements.txt
+
+      - name: Run v2 report script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        working-directory: v2
+        run: python main.py
