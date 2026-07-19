@@ -1,25 +1,42 @@
 import requests
 
-BASE_URL = "https://fapi.binance.com"
-OI_HIST_URL = f"{BASE_URL}/futures/data/openInterestHist"
+# Binance Futures API는 GitHub Actions(미국 클라우드 IP)에서 HTTP 451로 차단되어
+# Bybit v5 API로 대체함. (자세한 내용은 커밋 로그 참고)
+BASE_URL = "https://api.bybit.com"
 
 
-def get_open_interest_change(symbol="BTCUSDT", period="1h", limit=24):
+def _get_json(url, params):
+    """Bybit 응답을 가져오되, retCode != 0(에러)이면 원본 메시지를 그대로 노출하는
+    예외를 던진다."""
+    resp = requests.get(url, params=params, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("retCode") != 0:
+        raise RuntimeError(f"Bybit API 에러 응답: {data}")
+    return data["result"]
+
+
+def get_open_interest_change(symbol="BTCUSDT", interval="1h", limit=24):
     """최근 `limit`개 구간(기본 24시간, 1시간 단위)의 미결제약정 히스토리를 가져와
     구간 시작 대비 변화율(%)을 계산한다. 조회 실패 시 0.0을 반환한다."""
     try:
-        resp = requests.get(
-            OI_HIST_URL,
-            params={"symbol": symbol, "period": period, "limit": limit},
-            timeout=10,
+        result = _get_json(
+            f"{BASE_URL}/v5/market/open-interest",
+            {
+                "category": "linear",
+                "symbol": symbol,
+                "intervalTime": interval,
+                "limit": limit,
+            },
         )
-        resp.raise_for_status()
-        data = resp.json()
-        if len(data) < 2:
+        items = result.get("list", [])
+        if len(items) < 2:
             return 0.0
 
-        oldest = float(data[0]["sumOpenInterest"])
-        newest = float(data[-1]["sumOpenInterest"])
+        # timestamp 오름차순 정렬(오래된 것 -> 최신 것)
+        items = sorted(items, key=lambda x: int(x["timestamp"]))
+        oldest = float(items[0]["openInterest"])
+        newest = float(items[-1]["openInterest"])
         if oldest == 0:
             return 0.0
         return (newest - oldest) / oldest * 100
@@ -28,34 +45,19 @@ def get_open_interest_change(symbol="BTCUSDT", period="1h", limit=24):
         return 0.0
 
 
-def _get_json(url, params):
-    """Binance 응답을 가져오되, 예상한 필드가 없는 경우(지역 차단/에러 응답 등)
-    원본 응답 내용을 그대로 노출하는 예외를 던진다. (KeyError로 뭉개지 않기 위함)"""
-    resp = requests.get(url, params=params, timeout=10)
-    data = resp.json()
-    if isinstance(data, dict) and ("code" in data and "msg" in data):
-        raise RuntimeError(
-            f"Binance API 에러 응답 (status={resp.status_code}): {data}"
-        )
-    return data
-
-
 def get_market_data(symbol="BTCUSDT"):
-    # 24시간 시세
-    ticker = _get_json(f"{BASE_URL}/fapi/v1/ticker/24hr", {"symbol": symbol})
-
-    # Funding Rate
-    funding = _get_json(f"{BASE_URL}/fapi/v1/fundingRate", {"symbol": symbol, "limit": 1})
-
-    # Open Interest
-    oi = _get_json(f"{BASE_URL}/fapi/v1/openInterest", {"symbol": symbol})
+    result = _get_json(
+        f"{BASE_URL}/v5/market/tickers",
+        {"category": "linear", "symbol": symbol},
+    )
+    ticker = result["list"][0]
 
     return {
         "symbol": symbol,
         "price": float(ticker["lastPrice"]),
-        "change": float(ticker["priceChangePercent"]),
-        "volume": float(ticker["quoteVolume"]),
-        "funding": float(funding[0]["fundingRate"]),
-        "open_interest": float(oi["openInterest"]),
+        "change": float(ticker["price24hPcnt"]) * 100,
+        "volume": float(ticker["turnover24h"]),
+        "funding": float(ticker["fundingRate"]),
+        "open_interest": float(ticker["openInterest"]),
         "oi_change_24h": get_open_interest_change(symbol),
     }
