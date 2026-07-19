@@ -72,12 +72,12 @@ def rule_based_note(data, score):
 
 def _build_prompt(data, score, label):
     return (
-        "다음은 비트코인 무기한 선물(Binance) 데이터입니다.\n"
+        "다음은 비트코인 무기한 선물 데이터입니다.\n"
         f"- 현재가: {data['price']:,.0f} USDT\n"
         f"- 24시간 변동률: {data['change']:+.2f}%\n"
         f"- 24시간 거래대금: {data['volume']:,.0f} USDT\n"
         f"- 펀딩비: {data['funding']:.5f}\n"
-        f"- 미결제약정: {data['open_interest']:,.0f} BTC\n"
+        f"- 미결제약정: {data['open_interest']:,.0f} USDT (명목가치)\n"
         f"- 미결제약정 24h 변화율: {data.get('oi_change_24h', 0.0):+.1f}%\n"
         f"- 롱/숏 스코어: {score:+.1f} (-100 강한 숏 우세 ~ +100 강한 롱 우세)\n"
         f"- 규칙 기반 판단: {label}\n\n"
@@ -187,7 +187,7 @@ def build_report(symbol="BTCUSDT"):
         f"24h 변동: {data['change']:+.2f}%",
         f"24h 거래대금: {data['volume']:,.0f} USDT",
         f"펀딩비: {data['funding']:.5f}",
-        f"미결제약정: {data['open_interest']:,.0f} BTC",
+        f"미결제약정: {data['open_interest']:,.0f} USDT (명목가치)",
         f"미결제약정 24h 변화: {data.get('oi_change_24h', 0.0):+.1f}%",
         "",
         f"롱/숏 스코어: {score:+.1f} ({label})",
