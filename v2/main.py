@@ -70,39 +70,75 @@ def rule_based_note(data, score):
         return f"뚜렷한 쏠림 없이 중립 범위입니다({score:+.1f}점)."
 
 
-def ai_interpretation(data, score, label, note):
-    """ANTHROPIC_API_KEY가 있으면 Claude로 자연어 해석을 생성하고,
-    없거나 호출에 실패하면 규칙 기반 문장(note)을 그대로 반환한다."""
+def _build_prompt(data, score, label):
+    return (
+        "다음은 비트코인 무기한 선물(Binance) 데이터입니다.\n"
+        f"- 현재가: {data['price']:,.0f} USDT\n"
+        f"- 24시간 변동률: {data['change']:+.2f}%\n"
+        f"- 24시간 거래대금: {data['volume']:,.0f} USDT\n"
+        f"- 펀딩비: {data['funding']:.5f}\n"
+        f"- 미결제약정: {data['open_interest']:,.0f} BTC\n"
+        f"- 미결제약정 24h 변화율: {data.get('oi_change_24h', 0.0):+.1f}%\n"
+        f"- 롱/숏 스코어: {score:+.1f} (-100 강한 숏 우세 ~ +100 강한 롱 우세)\n"
+        f"- 규칙 기반 판단: {label}\n\n"
+        "위 데이터를 바탕으로 2~3문장으로 오늘의 시장 분위기와 주의할 점을 "
+        "한국어로 간결하게 설명해줘. 투자 조언이 아니라 참고용 해설 톤을 유지해."
+    )
+
+
+def _gemini_interpretation(prompt):
+    """GEMINI_API_KEY(무료 티어)로 자연어 해석을 생성한다. 실패 시 None 반환."""
+    import requests
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash-lite:generateContent?key={api_key}"
+    )
+    resp = requests.post(
+        url,
+        json={"contents": [{"parts": [{"text": prompt}]}]},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    result = resp.json()
+    return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+def _claude_interpretation(prompt):
+    """ANTHROPIC_API_KEY(유료)로 자연어 해석을 생성한다. 실패 시 None 반환."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return note
+        return None
 
-    try:
-        import anthropic
+    import anthropic
 
-        client = anthropic.Anthropic(api_key=api_key)
-        prompt = (
-            "다음은 비트코인 무기한 선물(Binance) 데이터입니다.\n"
-            f"- 현재가: {data['price']:,.0f} USDT\n"
-            f"- 24시간 변동률: {data['change']:+.2f}%\n"
-            f"- 24시간 거래대금: {data['volume']:,.0f} USDT\n"
-            f"- 펀딩비: {data['funding']:.5f}\n"
-            f"- 미결제약정: {data['open_interest']:,.0f} BTC\n"
-            f"- 미결제약정 24h 변화율: {data.get('oi_change_24h', 0.0):+.1f}%\n"
-            f"- 롱/숏 스코어: {score:+.1f} (-100 강한 숏 우세 ~ +100 강한 롱 우세)\n"
-            f"- 규칙 기반 판단: {label}\n\n"
-            "위 데이터를 바탕으로 2~3문장으로 오늘의 시장 분위기와 주의할 점을 "
-            "한국어로 간결하게 설명해줘. 투자 조언이 아니라 참고용 해설 톤을 유지해."
-        )
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return message.content[0].text.strip()
-    except Exception as e:  # API 실패 시 규칙 기반으로 조용히 폴백
-        print(f"[AI 해석 실패, 규칙 기반으로 대체] {e}")
-        return note
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text.strip()
+
+
+def ai_interpretation(data, score, label, note):
+    """무료 티어인 GEMINI_API_KEY를 우선 사용하고, 없으면 ANTHROPIC_API_KEY(유료)를
+    시도한다. 둘 다 없거나 호출에 실패하면 규칙 기반 문장(note)을 그대로 반환한다."""
+    prompt = _build_prompt(data, score, label)
+
+    for name, fn in (("Gemini", _gemini_interpretation), ("Claude", _claude_interpretation)):
+        try:
+            result = fn(prompt)
+            if result:
+                return result
+        except Exception as e:  # API 실패 시 다음 후보로 조용히 폴백
+            print(f"[{name} 해석 실패] {e}")
+
+    return note
 
 
 def send_telegram_message(text):
