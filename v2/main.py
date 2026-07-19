@@ -87,25 +87,36 @@ def _build_prompt(data, score, label):
 
 
 def _gemini_interpretation(prompt):
-    """GEMINI_API_KEY(무료 티어)로 자연어 해석을 생성한다. 실패 시 None 반환."""
+    """GEMINI_API_KEY(무료 티어)로 자연어 해석을 생성한다.
+    Google의 신규 Interactions API(v1beta/interactions)를 사용한다.
+    (구버전 v1beta/models/{model}:generateContent 엔드포인트는 최근 발급된
+    키/프로젝트에서 404가 나서 더 이상 사용하지 않음.) 실패 시 None 반환."""
     import requests
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.5-flash-lite:generateContent?key={api_key}"
-    )
+    url = "https://generativelanguage.googleapis.com/v1beta/interactions"
     resp = requests.post(
         url,
-        json={"contents": [{"parts": [{"text": prompt}]}]},
+        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+        json={"model": "gemini-2.5-flash-lite", "input": prompt},
         timeout=15,
     )
     resp.raise_for_status()
     result = resp.json()
-    return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+    texts = []
+    for step in result.get("steps", []):
+        if step.get("type") != "model_output":
+            continue
+        for item in step.get("content", []):
+            if item.get("type") == "text":
+                texts.append(item["text"])
+
+    combined = "\n".join(texts).strip()
+    return combined or None
 
 
 def _claude_interpretation(prompt):
