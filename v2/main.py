@@ -101,7 +101,7 @@ def _gemini_interpretation(prompt):
     resp = requests.post(
         url,
         headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-        json={"model": "gemini-2.5-flash-lite", "input": prompt},
+        json={"model": "gemini-3.5-flash", "input": prompt},
         timeout=15,
     )
     resp.raise_for_status()
